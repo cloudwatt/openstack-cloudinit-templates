@@ -1,0 +1,156 @@
+#cloud-config
+
+###############################################################################
+# Start a DevStack onto a virtual machine.
+#
+# It updates the distribution (only tested on Ubuntu), install some packages,
+# add a user 'stack' with password 'stack' and sudo rights (enable ssh password
+# authentication), clone DevStack repository into the home 'stack' user, paste
+# DevStack configuration 'local.conf' file and finally run the DevStack script
+# into a tmux session (named 'devstack').
+#
+# The DevStack configuration is the default one plus Neutron configured to use
+# ML2 plugin with Linux Bridge agent and VXLAN tunnels.
+#
+# When the VM was started, you can log on it with the user 'stack' and join the
+# tmux session with 'tmux attach-session -t DevStack' to follow the DevStack
+# script deployment. Or directly join screen session started by DevStack with
+# script '~/devstack/rejoin-stack.sh'
+###############################################################################
+
+package_update: true
+package_upgrade: true
+package_reboot_if_required: true
+
+packages:
+  - git
+  - mc
+  - vim
+  - traceroute
+  - htop
+  - tmux
+  - nmap
+
+ssh_pwauth: True
+
+groups:
+  - stack
+
+users:
+  - default
+  - name: stack
+    gecos: Foo User
+    primary-group: stack
+    groups: admin
+    plain_text_passwd: 'stack'
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock-passwd: false
+    shell: /bin/bash
+
+write_files:
+-   content: |
+        [[local|localrc]]
+        disable_service n-net
+        disable_service n-obj
+        disable_service tempest
+        disable_service cinder
+        disable_service c-api
+        disable_service c-vol
+        disable_service c-sch
+        #disable_service n-novnc
+        enable_service horizon
+        disable_service n-xvnc
+        enable_service q-svc
+        enable_service q-agt
+        enable_service q-dhcp
+        enable_service q-l3
+        enable_service q-meta
+        enable_service neutron
+        #enable_service n-spice
+        enable_service n-vnc
+
+        ADMIN_PASSWORD=password
+        MYSQL_PASSWORD=password
+        RABBIT_PASSWORD=password
+        SERVICE_PASSWORD=password
+        SERVICE_TOKEN=tokentoken
+
+        ROOTSLEEP=0
+        RECLONE=True
+        #OFFLINE=True
+        DATA_DIR=$TOP_DIR/data
+        SCREEN_LOGDIR=$TOP_DIR/log
+        VERBOSE=False
+
+        MULTI_HOST=True
+        FIXED_RANGE=192.168.85.0/24
+
+        ### NEUTRON ###
+        ### ML2 plugin ###
+        ENABLE_TENANT_TUNNELS=True
+        Q_ML2_PLUGIN_MECHANISM_DRIVERS=linuxbridge
+        Q_AGENT=linuxbridge
+
+        Q_ML2_PLUGIN_TYPE_DRIVERS=flat,vlan,gre,vxlan
+
+        # Prevent L3 agent from using br-ex
+        PUBLIC_BRIDGE=
+
+        # L2 population
+        Q_ML2_PLUGIN_MECHANISM_DRIVERS=$Q_ML2_PLUGIN_MECHANISM_DRIVERS,l2population
+
+        [[post-config|$NOVA_CONF]]
+        [DEFAULT]
+        vnc_enabled=True
+        vnc_keymap=fr
+        vncserver_listen=0.0.0.0
+        vncserver_proxyclient_address=$HOST_IP
+        libvirt_inject_key = False
+        libvirt_inject_partition = -2
+
+        [[post-config|/$Q_PLUGIN_CONF_FILE]]
+        [ml2]
+        tenant_network_types=vxlan
+
+        [vxlan]
+        enable_vxlan=true
+        l2_population=True
+        local_ip=$HOST_IP
+
+        [linux_bridge]
+        physical_interface_mappings = public:eth0
+
+        [ml2_type_flat]
+        flat_networks = public
+
+        [ml2_type_vxlan]
+        vni_ranges = 1001:2000
+
+        [[post-config|/$Q_DHCP_CONF_FILE]]
+        [DEFAULT]
+        enable_isolated_metadata = True
+        dnsmasq_dns_server = 8.8.8.8
+        dnsmasq_config_file = /etc/dnsmasq.conf
+
+        [[post-config|/$Q_L3_CONF_FILE]]
+        [DEFAULT]
+        external_network_bridge = ""
+    path: /opt/local.conf
+    permissions: 0664
+-   content: |
+        #!/usr/bin/env bash
+
+        tmux new-session -s devstack -n shell -d
+        tmux new-window -t devstack:1 -n devstack
+        tmux send-keys -t devstack:1 'cd ~/devstack; ./stack.sh' C-m
+        tmux select-window -t devstack:1
+    path: /opt/run_devstack_into_tmux.sh
+    permissions: 0775
+
+runcmd:
+  - [ sh, -xc, "echo '127.0.0.1 $(wget -q -O- http://169.254.169.254/latest/meta-data/hostname | cut -d .  -f 1)'' >> /etc/hosts" ]
+  - [ sh, -xc, "su stack -c 'cd ~; git clone https://github.com/openstack-dev/devstack.git'" ]
+  - [ sh, -xc, "su stack -c 'cp /opt/local.conf ~/devstack/'" ]
+  - [ sh, -xc, "su stack -c 'bash /opt/run_devstack_into_tmux.sh'" ]
+
+final_message: "!!! Your DevStack is up and running. You can reach the OpenStack dashboard !!! (cloud-init runs in $UPTIME seconds)"
