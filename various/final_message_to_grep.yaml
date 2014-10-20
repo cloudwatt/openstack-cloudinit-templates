@@ -1,0 +1,7 @@
+#cloud-config
+
+###############################################################################
+# Write a message a the end of the execution of cloud-init scripts
+###############################################################################
+
+final_message: "!!! TEXT TO GREP !!! (cloudinit finished $TIMESTAMP and runs in $UPTIME seconds)"

@@ -1,0 +1,14 @@
+#cloud-config
+
+###############################################################################
+# This is an example file to automatically configure resolv.conf when the
+# instance boots for the first time.
+###############################################################################
+
+manage-resolv-conf: false
+
+resolv_conf:
+  nameservers: ['x.x.x.x', 'x.x.x.x']
+  options:
+    rotate: true
+    timeout: 1
