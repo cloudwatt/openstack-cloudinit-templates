@@ -1,0 +1,139 @@
+#cloud-config
+
+###############################################################################
+# Start an OpenStack and an OpenContrail development environment onto a virtual
+# machine.
+#
+# It updates the distribution (only tested on Ubuntu), installs some packages,
+# clones OpenContrail installer repository, clones DevStack repository into the
+# home 'cloud' user, paste OpenContrail and DevStack configuration files and
+# finally run the OpenContrail and DevStack script into a tmux session
+# (named 'opencontrail').
+#
+# The DevStack configuration is the default one plus Neutron configured to use
+# OpenContrail.
+#
+# When the VM was started, you can log on it with the user 'cloud' and join the
+# tmux session with 'tmux attach-session -t opencontrail' to follow the
+# OpenContrail and DevStack script deployment. Or directly join screen sessions
+# started by OpenContrail or DevStack (named 'contrail' and 'stack')
+#
+# BUG: the OpenContrail script runs before devstack but Contrail API needs the
+# Keystone service to start properly.
+#
+# TODO: start OpenStack before OpenContrail
+###############################################################################
+
+package_update: true
+package_upgrade: true
+package_reboot_if_required: true
+
+packages:
+  - git
+  - subversion
+  - mc
+  - vim
+  - traceroute
+  - htop
+
+write_files:
+-   content: |
+        #!/usr/bin/env bash
+
+        tmux new-session -s opencontrail -n shell -d
+
+        tmux new-window -t opencontrail:1 -n contrail
+        tmux new-window -t opencontrail:2 -n stack
+
+        tmux send-keys -t opencontrail:1 'cd ~/ && git clone https://github.com/Juniper/contrail-installer.git && cd ~/contrail-installer/ && cp /opt/opencontrail_localrc localrc && ./contrail.sh build && ./contrail.sh install && ./contrail.sh configure && ./contrail.sh start && tmux send-keys -t opencontrail:2 "cd ~/ && git clone https://github.com/openstack-dev/devstack.git && cd ~/devstack && git checkout stable/icehouse && cp /opt/openstack_localrc localrc && cp ~/contrail-installer/devstack/lib/neutron_plugins/opencontrail lib/neutron_plugins/opencontrail && ./stack.sh" C-m' C-m
+
+        tmux select-window -t opencontrail:0
+    path: /opt/opencontrail_run.sh
+    permissions: 0775
+-   content: |
+        STACK_DIR=$(cd $(dirname $0) && pwd)
+
+        LOG_DIR=$STACK_DIR/log/screens
+        LOG=True
+        DEBUG=True
+        LOGFILE=$STACK_DIR/log/contrail.log
+        LOGDAYS=1
+        USE_SCREEN=True
+
+        DATABASE_PASSWORD=contrail123
+        RABBIT_PASSWORD=contrail123
+        SERVICE_TOKEN=contrail123
+        SERVICE_PASSWORD=contrail123
+        ADMIN_PASSWORD=contrail123
+
+        SERVICE_TIMEOUT=90
+        SERVICE_HOST=localhost
+        INSTALL_PROFILE=ALL 
+        PHYSICAL_INTERFACE=eth1
+
+        # to get source code make it as False 
+        CONTRAIL_DEFAULT_INSTALL=False
+
+        # repo proto is https or (default) ssh. Leave commented for ssh
+        CONTRAIL_REPO_PROTO=https
+
+        # proto for openstack bits. Use HTTPS if git is firewalled
+        GIT_BASE=https://github.com
+
+        CONTRAIL_VGW_PUBLIC_NETWORK=default-domain:admin:public:public
+        CONTRAIL_VGW_PUBLIC_SUBNET=172.16.1.0/24
+        CONTRAIL_VGW_INTERFACE=vgw
+    path: /opt/opencontrail_localrc
+    permissions: 0664
+-   content: |
+        STACK_DIR=$(cd $(dirname $0) && pwd)
+
+        LOG_DIR=$STACK_DIR/log/screens
+        LOG=True
+        DEBUG=True
+        LOGFILE=$STACK_DIR/log/stack.log
+        LOGDAYS=1
+        SCREEN_LOGDIR=$LOG_DIR
+
+        disable_service n-net
+        disable_service n-obj
+        disable_service tempest
+        disable_service cinder
+        disable_service c-api
+        disable_service c-vol
+        disable_service c-sch
+        enable_service q-svc
+        enable_service q-meta
+        enable_service neutron
+        disable_service q-agt
+        disable_service q-dhcp
+        disable_service q-l3
+        disable_service h-eng
+        disable_service h-api
+        disable_service h-api-cfn
+        disable_service h-api-cw
+
+        DATABASE_PASSWORD=contrail123
+        RABBIT_PASSWORD=contrail123
+        SERVICE_TOKEN=contrail123
+        SERVICE_PASSWORD=contrail123
+        ADMIN_PASSWORD=contrail123
+
+        Q_PLUGIN=opencontrail
+        HOST_IP_IFACE=vhost0
+
+        # proto for openstack bits. Use HTTPS if git is firewalled
+        GIT_BASE=https://git.openstack.org
+
+        # opencontrail nova plugin
+        NOVA_VIF_DRIVER=nova_contrail_vif.contrailvif.VRouterVIFDriver
+    path: /opt/openstack_localrc
+    permissions: 0664
+
+final_message: "!!! Starting building OpenContail !!! (cloudinit runs in $UPTIME seconds)"
+
+runcmd:
+  - [ sh, -xc, "cp /etc/network/interfaces.d/eth0.cfg /etc/network/interfaces.d/eth1.cfg && sed -i 's/eth0/eth1/g' /etc/network/interfaces.d/eth1.cfg && ifup eth1"]
+  - [ sh, -xc, "echo '127.0.0.1 $(wget -q -O- http://169.254.169.254/latest/meta-data/hostname | cut -d .  -f 1)' >> /etc/hosts" ]
+  - [ sh, -xc, "su cloud -c 'bash /opt/opencontrail_run.sh'" ]
+  - [ sh, -xc, "su cloud -c 'test $(which git) && git config --global http.sslVerify false'"]
