@@ -73,7 +73,7 @@ write_files:
         OFFLINE=True
         DATA_DIR=$TOP_DIR/data
         SCREEN_LOGDIR=$TOP_DIR/log
-        #VERBOSE=False
+        VERBOSE=False
 
         MULTI_HOST=True
         HOST_IP=10.0.0.251
@@ -101,6 +101,7 @@ write_files:
         Q_ML2_PLUGIN_MECHANISM_DRIVERS=$Q_ML2_PLUGIN_MECHANISM_DRIVERS,l2population
 
         [[post-config|/$NEUTRON_CONF]]
+        [DEFAULT]
         network_device_mtu=1450
 
         [[post-config|/$Q_PLUGIN_CONF_FILE]]
@@ -136,6 +137,7 @@ write_files:
 
 runcmd:
   - [ sh, -xc, "echo '127.0.0.1 $(wget -q -O- http://169.254.169.254/latest/meta-data/hostname | cut -d .  -f 1)'' >> /etc/hosts" ]
+  - [ sh, -xc, "echo 'dhcp-option-force=26,1450' > /etc/dnsmasq.conf" ]
   - [ sh, -xc, "su stack -c 'cd ~; git clone https://github.com/openstack-dev/devstack.git'" ]
   - [ sh, -xc, "su stack -c 'cp /opt/local.conf ~/devstack/'" ]
   - [ sh, -xc, "su stack -c 'bash /opt/run_devstack_into_tmux.sh'" ]
