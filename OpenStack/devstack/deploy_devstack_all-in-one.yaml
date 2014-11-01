@@ -138,7 +138,7 @@ write_files:
 runcmd:
   - [ sh, -xc, "echo '127.0.0.1 $(wget -q -O- http://169.254.169.254/latest/meta-data/hostname | cut -d .  -f 1)'' >> /etc/hosts" ]
   - [ sh, -xc, "echo 'dhcp-option-force=26,1450' > /etc/dnsmasq.conf" ]
-  - [ sh, -xc, "su stack -c 'cd ~; git clone https://github.com/openstack-dev/devstack.git'" ]
+  - [ sh, -xc, "su stack -c 'cd ~; git clone https://github.com/openstack-dev/devstack.git; cd ~/devstack; git revert 15130cd5fd1688b8984d78136b97bb8de7c32b64'" ]
   - [ sh, -xc, "su stack -c 'cp /opt/local.conf ~/devstack/'" ]
   - [ sh, -xc, "su stack -c 'bash /opt/run_devstack_into_tmux.sh'" ]
 
