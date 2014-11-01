@@ -50,24 +50,17 @@ users:
 write_files:
 -   content: |
         [[local|localrc]]
-        disable_service n-net
-        disable_service n-obj
+        # Disable unnecessary Nova processes
+        disable_service n-net n-obj n-xvnc
+        #disable_service n-net n-vnc n-obj n-novnc n-xvnc
+        # Disable tempest tests
         disable_service tempest
-        disable_service cinder
-        disable_service c-api
-        disable_service c-vol
-        disable_service c-sch
-        #disable_service n-novnc
-        enable_service horizon
-        disable_service n-xvnc
-        enable_service q-svc
-        enable_service q-agt
-        enable_service q-dhcp
-        enable_service q-l3
-        enable_service q-meta
-        enable_service neutron
-        #enable_service n-spice
-        enable_service n-vnc
+        # Disable Cinder
+        disable_service cinder c-api c-vol c-sch
+        # Enable Neutron
+        enable_service neutron q-svc q-agt q-l3 q-dhcp q-meta
+        # Disable Heat
+        disable_service heat h-api h-api-cfn h-api-cw h-eng
 
         ADMIN_PASSWORD=password
         MYSQL_PASSWORD=password
@@ -76,53 +69,51 @@ write_files:
         SERVICE_TOKEN=tokentoken
 
         ROOTSLEEP=0
-        RECLONE=True
-        #OFFLINE=True
+        #RECLONE=True
+        OFFLINE=True
         DATA_DIR=$TOP_DIR/data
         SCREEN_LOGDIR=$TOP_DIR/log
-        VERBOSE=False
+        #VERBOSE=False
 
         MULTI_HOST=True
+        HOST_IP=10.0.0.251
+        FLOATING_RANGE=10.0.0.0/24
+        Q_FLOATING_ALLOCATION_POOL="start=10.0.0.200,end=10.0.0.220"
+        PUBLIC_NETWORK_GATEWAY=10.0.0.1
         FIXED_RANGE=192.168.85.0/24
+        NETWORK_GATEWAY=192.168.85.1
 
         ### NEUTRON ###
+        # Configure Neutron with ML2 plugin and LB l2 agent with VXLAN overlay
+        # and activate l2 population mechanism driver to optimize the l2
+        # overlay
         ### ML2 plugin ###
         ENABLE_TENANT_TUNNELS=True
         Q_ML2_PLUGIN_MECHANISM_DRIVERS=linuxbridge
         Q_AGENT=linuxbridge
-
         Q_ML2_PLUGIN_TYPE_DRIVERS=flat,vlan,gre,vxlan
 
         # Prevent L3 agent from using br-ex
         PUBLIC_BRIDGE=
+        Q_USE_PROVIDERNET_FOR_PUBLIC=True
 
         # L2 population
         Q_ML2_PLUGIN_MECHANISM_DRIVERS=$Q_ML2_PLUGIN_MECHANISM_DRIVERS,l2population
 
-        [[post-config|$NOVA_CONF]]
-        [DEFAULT]
-        vnc_enabled=True
-        vnc_keymap=fr
-        vncserver_listen=0.0.0.0
-        vncserver_proxyclient_address=$HOST_IP
-        libvirt_inject_key = False
-        libvirt_inject_partition = -2
+        [[post-config|/$NEUTRON_CONF]]
+        network_device_mtu=1450
 
         [[post-config|/$Q_PLUGIN_CONF_FILE]]
         [ml2]
         tenant_network_types=vxlan
-
         [vxlan]
         enable_vxlan=true
         l2_population=True
         local_ip=$HOST_IP
-
         [linux_bridge]
         physical_interface_mappings = public:eth0
-
         [ml2_type_flat]
         flat_networks = public
-
         [ml2_type_vxlan]
         vni_ranges = 1001:2000
 
@@ -131,10 +122,6 @@ write_files:
         enable_isolated_metadata = True
         dnsmasq_dns_server = 8.8.8.8
         dnsmasq_config_file = /etc/dnsmasq.conf
-
-        [[post-config|/$Q_L3_CONF_FILE]]
-        [DEFAULT]
-        external_network_bridge = ""
     path: /opt/local.conf
     permissions: 0664
 -   content: |
