@@ -11,6 +11,9 @@
 #
 # The DevStack configuration is the default one plus Neutron configured to use
 # ML2 plugin with Linux Bridge agent and VXLAN tunnels.
+# /!\ BE CARREFUL /!\
+# That devstack configuration requires the 'eth0' VM interface have an IP on
+# subnet 10.0.0.0/24 and it's IP was not in the range 10.0.0.200 to 220.
 #
 # When the VM was started, you can log on it with the user 'stack' and join the
 # tmux session with 'tmux attach-session -t DevStack' to follow the DevStack
@@ -130,7 +133,7 @@ write_files:
 
         tmux new-session -s devstack -n shell -d
         tmux new-window -t devstack:1 -n devstack
-        tmux send-keys -t devstack:1 'cd ~/devstack; ./stack.sh' C-m
+        tmux send-keys -t devstack:1 "cd ~/devstack; sed -i 's/%HOST_IP%/$(ip -o -4 a | grep eth0 | awk '{print $4}' | cut -d '/' -f 1)/g' ~/devstack/local.conf; ./stack.sh" C-m
         tmux select-window -t devstack:1
     path: /opt/run_devstack_into_tmux.sh
     permissions: 0775
@@ -138,8 +141,9 @@ write_files:
 runcmd:
   - [ sh, -xc, "echo '127.0.0.1 $(wget -q -O- http://169.254.169.254/latest/meta-data/hostname | cut -d .  -f 1)'' >> /etc/hosts" ]
   - [ sh, -xc, "echo 'dhcp-option-force=26,1450' > /etc/dnsmasq.conf" ]
-  - [ sh, -xc, "su stack -c 'cd ~; git clone https://github.com/openstack-dev/devstack.git; cd ~/devstack; git reset --hard f33e76bf9bd9a3bc39e8b3b99257a4ae98a10d25'" ]
-  - [ sh, -xc, "su stack -c 'cp /opt/local.conf ~/devstack/'; HOST_IP=$(ip -o -4 a | grep brq3edb99b4-1f | awk '{print $4}' | cut -d '/' -f 1); sed -i s/%HOST_IP%/$HOST_IP/g ~/devstack/local.conf" ]
+  - [ sh, -xc, "su stack -c 'cd ~; git clone https://github.com/openstack-dev/devstack.git; cd ~/devstack; git revert 15130cd5fd1688b8984d78136b97bb8de7c32b64'" ]
+#  - [ sh, -xc, "su stack -c 'cd ~; git clone https://github.com/openstack-dev/devstack.git; cd ~/devstack; git reset --hard f33e76bf9bd9a3bc39e8b3b99257a4ae98a10d25'" ]
+  - [ sh, -xc, "su stack -c 'cp /opt/local.conf ~/devstack/'" ]
   - [ sh, -xc, "su stack -c 'bash /opt/run_devstack_into_tmux.sh'" ]
 
 final_message: "!!! Your DevStack is up and running. You can reach the OpenStack dashboard !!! (cloud-init runs in $UPTIME seconds)"
