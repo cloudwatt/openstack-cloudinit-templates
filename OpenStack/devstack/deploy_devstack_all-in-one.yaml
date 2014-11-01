@@ -69,8 +69,8 @@ write_files:
         SERVICE_TOKEN=tokentoken
 
         ROOTSLEEP=0
-        #RECLONE=True
-        OFFLINE=True
+        RECLONE=True
+        #OFFLINE=True
         DATA_DIR=$TOP_DIR/data
         SCREEN_LOGDIR=$TOP_DIR/log
         VERBOSE=False
